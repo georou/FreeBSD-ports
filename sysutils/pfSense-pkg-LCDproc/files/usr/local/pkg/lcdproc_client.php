@@ -102,27 +102,6 @@ function get_uptime_stats() {
 	return($status);
 }
 
-/* Returns CPU temperature if available from the system */
-function get_cpu_temperature() {
-	$temp_out = "";
-	$execRet = "";
-	exec("/sbin/sysctl -n dev.cpu.0.temperature", $temp_out, $execRet);
-	if ($execRet === 0) {
-		$cputemperature = trim($temp_out[0]);
-		return $cputemperature;
-	} else {
-		exec("/sbin/sysctl -n hw.acpi.thermal.tz0.temperature", $temp_out, $execRet);
-	}
-
-	if ($execRet === 0) {
-		$cputemperature = trim($temp_out[0]);
-		return $cputemperature;
-	} else {
-		// sysctl probably returned "unknown oid" 
-		return 'CPU Temp N/A';
-	}
-}
-
 function get_loadavg_stats() {
 	exec("/usr/bin/uptime", $output, $ret);
 
@@ -182,6 +161,55 @@ function get_cpufrequency() {
 	} else {
 		$curfreq = get_cpu_currentfrequency();
 		return "$curfreq\/$maxfreq Mhz";
+	}
+}
+
+/* Returns CPU temperature if available from the system */
+function get_cpu_temperature() {
+	global $config;
+	$lcdproc_screens_config = $config['installedpackages']['lcdprocscreens']['config'][0];
+	$unit = $lcdproc_screens_config['scr_cputemperature_unit'];
+
+	$temp_out = "";
+	$execRet = "";
+	exec("/sbin/sysctl -n dev.cpu.0.temperature", $temp_out, $execRet);
+	if ($execRet === 0) {
+		switch ($unit) {
+			case "c":
+				$cputemperature = trim($temp_out[0]);
+				return $cputemperature;
+				break;
+			case "f":
+				// Remove 'C' from the end and spaces
+				$temp_deg_c = trim(rtrim($temp_out[0], 'C'));
+				$cputemperature = $temp_deg_c * 1.8 + 32;
+				return $cputemperature . "F";
+				break;
+			default:
+				break;
+		}
+	} else {
+		exec("/sbin/sysctl -n hw.acpi.thermal.tz0.temperature", $temp_out, $execRet);
+	}
+
+	if ($execRet === 0) {
+		switch ($unit) {
+			case "c":
+				$cputemperature = trim($temp_out[0]);
+				return $cputemperature;
+				break;
+			case "f":
+				// Remove 'C' from the end and spaces
+				$temp_deg_c = trim(rtrim($temp_out[0], 'C'));
+				$cputemperature = $temp_deg_c * 1.8 + 32;
+				return $cputemperature . "F";
+				break;
+			default:
+				break;
+		}
+	} else {
+		// sysctl probably returned "unknown oid" 
+		return 'CPU Temp N/A';
 	}
 }
 
