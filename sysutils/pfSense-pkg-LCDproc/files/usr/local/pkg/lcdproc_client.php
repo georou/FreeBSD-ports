@@ -108,8 +108,7 @@ function lcdproc_get_nut_ups_status() {
 
 // NTP Status
 function lcdproc_get_ntp_status() { // https://github.com/pfsense/pfsense/blob/master/src/usr/local/www/widgets/widgets/ntp_status.widget.php#L36
-	global $config;
-	if ($config['ntpd']['enable'] == 'enabled') {
+	if (config_get_path('ntpd/enable') == 'enabled') {
 		if (isset($config['system']['ipv6allow'])) {
 			$inet_version = "";
 		} else {
