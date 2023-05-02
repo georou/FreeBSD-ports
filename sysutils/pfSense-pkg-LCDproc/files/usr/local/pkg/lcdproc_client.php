@@ -109,8 +109,6 @@ function lcdproc_get_nut_ups_status() {
 // NTP Status
 function lcdproc_get_ntp_status() { // https://github.com/pfsense/pfsense/blob/master/src/usr/local/www/widgets/widgets/ntp_status.widget.php#L36
 	global $config;
-	//if (is_service_enabled('ntpd')) {
-	//if (config_get_path('ntpd/enable') == 'enabled') {
 	if ($config['ntpd']['enable'] == 'enabled') {
 		if (isset($config['system']['ipv6allow'])) {
 			$inet_version = "";
@@ -118,35 +116,35 @@ function lcdproc_get_ntp_status() { // https://github.com/pfsense/pfsense/blob/m
 			$inet_version = " -4";
 		}
 		exec('/usr/local/sbin/ntpq -pnw ' . $inet_version . ' | /usr/bin/tail +3 | /usr/bin/awk -v RS= \'{gsub(/\n[[:space:]][[:space:]]+/," ")}1\'', $ntpq_output);
-		$ntpq_counter = 0;
-		$stratum_text = gettext("stratum");
-		foreach ($ntpq_output as $line) {
-			if (substr($line, 0, 1) == "*") {
-				//Active NTP Peer
-				$line = substr($line, 1);
-				$peerinfo = preg_split("/[\s\t]+/", $line);
-				if ($peerinfo[2] == "1") {
-					$syncsource = $peerinfo[0] . " (" . $stratum_text . " " . $peerinfo[2] . ", " . $peerinfo[1] . ")";
-				} else {
-					$syncsource = $peerinfo[0] . " (" . $stratum_text . " " . $peerinfo[2] . ")";
-				}
-				$ntpq_counter++;
-			} elseif (substr($line, 0, 1) == "o") {
-				//Local PPS Peer
-				$line = substr($line, 1);
-				$peerinfo = preg_split("/[\s\t]+/", $line);
-				$syncsource = $peerinfo[1] . " (" . $stratum_text . " " . $peerinfo[2] . ", PPS)";
-				$ntpq_counter++;
-			}
-		}	
-		if ($ntpq_counter == 0) {
-			return 'No active peers available';
-		} else {
-			return $syncsource;
-		}
+		return $ntpq_output;
 	} else {
 		return 'NTP Server is Disabled';
 	}
+}
+
+function lcdproc_get_ntp_gps_sat_count() {
+	global $config;
+	//if (isset($gps_ok) && isset($config['ntpd']['gps']['extstatus'])) {
+	if (isset($config['ntpd']['gps']['extstatus'])) {
+		$lookfor['GPGSV'] = config_get_path('ntpd/gps/nmeaset/gpgsv');
+		$lookfor['GPGGA'] = !isset($gps_sat) && $config['ntpd']['gps']['nmeaset']['gpgga'];
+		$gpsport = fopen('/dev/gps0', 'r+');
+		while ($gpsport && ($lookfor['GPGSV'] || $lookfor['GPGGA'])) {
+			$buffer = fgets($gpsport);
+			if ($lookfor['GPGSV'] && substr($buffer, 0, 6) == '$GPGSV') {
+				$gpgsv = explode(',', $buffer);
+				$gps_satview = (int)$gpgsv[3];
+				return ("Sats: " . $gps_satview . " in view");
+			} elseif ($lookfor['GPGGA'] && substr($buffer, 0, 6) == '$GPGGA') {
+				$gpgga = explode(',', $buffer);
+				$gps_sat = (int)$gpgga[7];
+				return ("Sats: " . $gps_sat . " in use");
+			}
+		}
+	} else {
+		return false;
+	}
+
 }
 
 function lcdproc_get_version() {
@@ -1076,13 +1074,23 @@ function lcdproc_build_interface($lcd) {
 						$includeSummary = false; // this screen needs all the lines
 						break;
 					case "scr_ntp":
+//						$lcd_cmds[] = "screen_add $name";
+//						$lcd_cmds[] = "screen_set $name heartbeat off";
+//						$lcd_cmds[] = "screen_set $name name $name";
+//						$lcd_cmds[] = "screen_set $name duration $refresh_frequency";
+//						$lcd_cmds[] = "widget_add $name title_wdgt string";
+//						$lcd_cmds[] = "widget_add $name text_wdgt scroller";
+//						$lcd_cmds[] = "widget_set $name title_wdgt 1 1 \"+ NTP Source\"";
 						$lcd_cmds[] = "screen_add $name";
 						$lcd_cmds[] = "screen_set $name heartbeat off";
 						$lcd_cmds[] = "screen_set $name name $name";
 						$lcd_cmds[] = "screen_set $name duration $refresh_frequency";
-						$lcd_cmds[] = "widget_add $name title_wdgt string";
-						$lcd_cmds[] = "widget_add $name text_wdgt scroller";
-						$lcd_cmds[] = "widget_set $name title_wdgt 1 1 \"+ NTP Source\"";
+						$lcd_cmds[] = "widget_add $name source_wdgt scroller";
+						$lcd_cmds[] = "widget_add $name delay_wdgt scroller";
+						$lcd_cmds[] = "widget_add $name offset_wdgt scroller";
+						$lcd_cmds[] = "widget_add $name jitter_wdgt scroller";
+
+						$includeSummary = false; // this screen needs all the lines
 						break;
 					case "scr_traffic":
 						$lcd_cmds[] = "screen_add $name";
@@ -1355,8 +1363,39 @@ function lcdproc_loop_status($lcd) {
 					$updateSummary = false;
 					break;
 				case "scr_ntp":
-					$ntp_status = lcdproc_get_ntp_status();
-					$lcd_cmds[] = "widget_set $name text_wdgt 1 2 $lcdpanel_width 2 h 4 \"{$ntp_status}\"";
+					$gps_sat_count = lcdproc_get_ntp_gps_sat_count();
+					$ntpq_output = lcdproc_get_ntp_status();
+
+					$ntpq_counter = 0;
+					foreach ($ntpq_output as $line) {
+						if (substr($line, 0, 1) == "*") {
+							//Active NTP Peer
+							$line = substr($line, 1);
+							$peerinfo = preg_split("/[\s\t]+/", $line);
+							if ($peerinfo[2] == "1") {
+								$lcd_cmds[] = "widget_set $name source_wdgt 1 1 $lcdpanel_width 2 h 4 \"{$peerinfo[0]} ({$stratum_text} {$peerinfo[2]}, {$peerinfo[1]})\"";
+							} else {
+								$lcd_cmds[] = "widget_set $name source_wdgt 1 1 $lcdpanel_width 2 h 4 \"{$peerinfo[1]} (stratum {$peerinfo[2]}) " . (($gps_sat_count == false) ? "" : "{$gps_sat_count}") . "\"";
+								$lcd_cmds[] = "widget_set $name delay_wdgt 1 2 $lcdpanel_width 2 h 4 \"Delay: {$peerinfo[7]}\"";
+								$lcd_cmds[] = "widget_set $name offset_wdgt 1 3 $lcdpanel_width 2 h 4 \"Offset: {$peerinfo[8]}\"";
+								$lcd_cmds[] = "widget_set $name jitter_wdgt 1 4 $lcdpanel_width 2 h 4 \"Jitter: {$peerinfo[9]}\"";
+							}
+							$ntpq_counter++;
+						} elseif (substr($line, 0, 1) == "o") {
+							//Local PPS Peer
+							$line = substr($line, 1);
+							$peerinfo = preg_split("/[\s\t]+/", $line);
+							$lcd_cmds[] = "widget_set $name source_wdgt 1 1 $lcdpanel_width 2 h 4 \"{$peerinfo[1]} (stratum {$peerinfo[2]}, PPS)\"";
+							$ntpq_counter++;
+						}
+					}
+					if ($ntpq_counter == 0) {
+						$lcd_cmds[] = "widget_set $name source_wdgt 1 1 $lcdpanel_width 2 h 4 \"No active peers available\"";
+						$lcd_cmds[] = "widget_set $name delay_wdgt 1 2 $lcdpanel_width 2 h 4 \"\"";
+						$lcd_cmds[] = "widget_set $name offset_wdgt 1 3 $lcdpanel_width 2 h 4 \"\"";
+						$lcd_cmds[] = "widget_set $name jitter_wdgt 1 4 $lcdpanel_width 2 h 4 \"\"";
+					} 
+					$updateSummary = false;
 					break;
 				case "scr_traffic":
 					if ($interfaceTrafficList == null) $interfaceTrafficList = lcdproc_build_interface_traffic_stats_list(); // We only want lcdproc_build_interface_traffic_stats_list() to be called once per loop, and only if it's needed
