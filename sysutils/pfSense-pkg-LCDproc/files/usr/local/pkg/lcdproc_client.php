@@ -126,7 +126,8 @@ function lcdproc_get_ntp_gps_sat_count() {
 	global $config;
 	//if (isset($gps_ok) && isset($config['ntpd']['gps']['extstatus'])) {
 	if (isset($config['ntpd']['gps']['extstatus'])) {
-		$lookfor['GPGSV'] = config_get_path('ntpd/gps/nmeaset/gpgsv');
+		//$lookfor['GPGSV'] = config_get_path('ntpd/gps/nmeaset/gpgsv');
+		$lookfor['GPGSV'] = $config['ntpd']['gps']['nmeaset']['gpgsv'];
 		$lookfor['GPGGA'] = !isset($gps_sat) && $config['ntpd']['gps']['nmeaset']['gpgga'];
 		$gpsport = fopen('/dev/gps0', 'r+');
 		while ($gpsport && ($lookfor['GPGSV'] || $lookfor['GPGGA'])) {
