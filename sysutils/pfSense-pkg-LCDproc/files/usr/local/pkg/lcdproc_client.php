@@ -1374,7 +1374,10 @@ function lcdproc_loop_status($lcd) {
 							$line = substr($line, 1);
 							$peerinfo = preg_split("/[\s\t]+/", $line);
 							if ($peerinfo[2] == "1") {
-								$lcd_cmds[] = "widget_set $name source_wdgt 1 1 $lcdpanel_width 2 h 4 \"{$peerinfo[0]} ({$stratum_text} {$peerinfo[2]}, {$peerinfo[1]})\"";
+								$lcd_cmds[] = "widget_set $name source_wdgt 1 1 $lcdpanel_width 2 h 4 \"{$peerinfo[0]} (stratum {$peerinfo[2]}, {$peerinfo[1]})\"";
+								$lcd_cmds[] = "widget_set $name delay_wdgt 1 2 $lcdpanel_width 2 h 4 \"Delay: {$peerinfo[7]}\"";
+								$lcd_cmds[] = "widget_set $name offset_wdgt 1 3 $lcdpanel_width 2 h 4 \"Offset: {$peerinfo[8]}\"";
+								$lcd_cmds[] = "widget_set $name jitter_wdgt 1 4 $lcdpanel_width 2 h 4 \"Jitter: {$peerinfo[9]}\"";
 							} else {
 								$lcd_cmds[] = "widget_set $name source_wdgt 1 1 $lcdpanel_width 2 h 4 \"{$peerinfo[1]} (stratum {$peerinfo[2]}) " . (($gps_sat_count == false) ? "" : "{$gps_sat_count}") . "\"";
 								$lcd_cmds[] = "widget_set $name delay_wdgt 1 2 $lcdpanel_width 2 h 4 \"Delay: {$peerinfo[7]}\"";
