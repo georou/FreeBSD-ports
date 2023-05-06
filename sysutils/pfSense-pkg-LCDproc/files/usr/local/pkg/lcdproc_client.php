@@ -118,7 +118,7 @@ function lcdproc_get_ntp_status() { // https://github.com/pfsense/pfsense/blob/m
 		exec('/usr/local/sbin/ntpq -pnw ' . $inet_version . ' | /usr/bin/tail +3 | /usr/bin/awk -v RS= \'{gsub(/\n[[:space:]][[:space:]]+/," ")}1\'', $ntpq_output);
 		return $ntpq_output;
 	} else {
-		return 'NTP Server is Disabled';
+		return false;
 	}
 }
 
@@ -1364,46 +1364,54 @@ function lcdproc_loop_status($lcd) {
 					$updateSummary = false;
 					break;
 				case "scr_ntp":
-					$gps_sat_count = lcdproc_get_ntp_gps_sat_count();
 					$ntpq_output = lcdproc_get_ntp_status();
-
-					$ntpq_counter = 0;
-					foreach ($ntpq_output as $line) {
-						if (substr($line, 0, 1) == "*") {
-							//Active NTP Peer
-							$line = substr($line, 1);
-							$peerinfo = preg_split("/[\s\t]+/", $line);
-							if ($peerinfo[2] == "1") {
-								// When local GPS is used. Show the IP of the source, the stratum and the REFID used by the source. Also append how many satellites are in use or in view
-								$lcd_cmds[] = "widget_set $name source_wdgt 1 1 $lcdpanel_width 2 h 4 \"{$peerinfo[1]} (stratum {$peerinfo[2]}) " . (($gps_sat_count == false) ? "" : "{$gps_sat_count}") . "\"";
+					
+					if ($ntpq_output != false) {
+						$ntpq_counter = 0;
+						foreach ($ntpq_output as $line) {
+							if (substr($line, 0, 1) == "*") {
+								//Active NTP Peer
+								$line = substr($line, 1);
+								$peerinfo = preg_split("/[\s\t]+/", $line);
+								if ($peerinfo[2] == "0") {
+									// When local GPS is used. Show the IP of the source and the stratum. Also append how many satellites are in use or in view
+									$gps_sat_count = lcdproc_get_ntp_gps_sat_count();
+									$lcd_cmds[] = "widget_set $name source_wdgt 1 1 $lcdpanel_width 2 h 4 \"{$peerinfo[1]} (stratum {$peerinfo[2]}) " . (($gps_sat_count == false) ? "" : "{$gps_sat_count}") . "\"";
+									$lcd_cmds[] = "widget_set $name delay_wdgt 1 2 $lcdpanel_width 2 h 4 \"Delay: {$peerinfo[7]}\"";
+									$lcd_cmds[] = "widget_set $name offset_wdgt 1 3 $lcdpanel_width 2 h 4 \"Offset: {$peerinfo[8]}\"";
+									$lcd_cmds[] = "widget_set $name jitter_wdgt 1 4 $lcdpanel_width 2 h 4 \"Jitter: {$peerinfo[9]}\"";
+								} else {
+									// Show IP of the source and the stratum
+									$lcd_cmds[] = "widget_set $name source_wdgt 1 1 $lcdpanel_width 2 h 4 \"{$peerinfo[0]} (stratum {$peerinfo[2]})\"";
+									$lcd_cmds[] = "widget_set $name delay_wdgt 1 2 $lcdpanel_width 2 h 4 \"Delay: {$peerinfo[7]}\"";
+									$lcd_cmds[] = "widget_set $name offset_wdgt 1 3 $lcdpanel_width 2 h 4 \"Offset: {$peerinfo[8]}\"";
+									$lcd_cmds[] = "widget_set $name jitter_wdgt 1 4 $lcdpanel_width 2 h 4 \"Jitter: {$peerinfo[9]}\"";
+								}
+								$ntpq_counter++;
+							} elseif (substr($line, 0, 1) == "o") {
+								//Local PPS Peer
+								$line = substr($line, 1);
+								$peerinfo = preg_split("/[\s\t]+/", $line);
+								$lcd_cmds[] = "widget_set $name source_wdgt 1 1 $lcdpanel_width 2 h 4 \"{$peerinfo[1]} (stratum {$peerinfo[2]}, PPS)\"";
 								$lcd_cmds[] = "widget_set $name delay_wdgt 1 2 $lcdpanel_width 2 h 4 \"Delay: {$peerinfo[7]}\"";
 								$lcd_cmds[] = "widget_set $name offset_wdgt 1 3 $lcdpanel_width 2 h 4 \"Offset: {$peerinfo[8]}\"";
 								$lcd_cmds[] = "widget_set $name jitter_wdgt 1 4 $lcdpanel_width 2 h 4 \"Jitter: {$peerinfo[9]}\"";
-							} else {
-								// Show IP of the source, the stratum and the REFID used by the source
-								$lcd_cmds[] = "widget_set $name source_wdgt 1 1 $lcdpanel_width 2 h 4 \"{$peerinfo[0]} (stratum {$peerinfo[2]}, {$peerinfo[1]})\"";
-								$lcd_cmds[] = "widget_set $name delay_wdgt 1 2 $lcdpanel_width 2 h 4 \"Delay: {$peerinfo[7]}\"";
-								$lcd_cmds[] = "widget_set $name offset_wdgt 1 3 $lcdpanel_width 2 h 4 \"Offset: {$peerinfo[8]}\"";
-								$lcd_cmds[] = "widget_set $name jitter_wdgt 1 4 $lcdpanel_width 2 h 4 \"Jitter: {$peerinfo[9]}\"";
+								$ntpq_counter++;
 							}
-							$ntpq_counter++;
-						} elseif (substr($line, 0, 1) == "o") {
-							//Local PPS Peer
-							$line = substr($line, 1);
-							$peerinfo = preg_split("/[\s\t]+/", $line);
-							$lcd_cmds[] = "widget_set $name source_wdgt 1 1 $lcdpanel_width 2 h 4 \"{$peerinfo[1]} (stratum {$peerinfo[2]}, PPS)\"";
-							$lcd_cmds[] = "widget_set $name delay_wdgt 1 2 $lcdpanel_width 2 h 4 \"Delay: {$peerinfo[7]}\"";
-							$lcd_cmds[] = "widget_set $name offset_wdgt 1 3 $lcdpanel_width 2 h 4 \"Offset: {$peerinfo[8]}\"";
-							$lcd_cmds[] = "widget_set $name jitter_wdgt 1 4 $lcdpanel_width 2 h 4 \"Jitter: {$peerinfo[9]}\"";
-							$ntpq_counter++;
 						}
-					}
-					if ($ntpq_counter == 0) {
-						$lcd_cmds[] = "widget_set $name source_wdgt 1 1 $lcdpanel_width 2 h 4 \"No active peers available\"";
+						if ($ntpq_counter == 0) {
+							$lcd_cmds[] = "widget_set $name source_wdgt 1 1 $lcdpanel_width 2 h 4 \"No active peers available\"";
+							$lcd_cmds[] = "widget_set $name delay_wdgt 1 2 $lcdpanel_width 2 h 4 \"\"";
+							$lcd_cmds[] = "widget_set $name offset_wdgt 1 3 $lcdpanel_width 2 h 4 \"\"";
+							$lcd_cmds[] = "widget_set $name jitter_wdgt 1 4 $lcdpanel_width 2 h 4 \"\"";
+						} 
+					} else {
+						$lcd_cmds[] = "widget_set $name source_wdgt 1 1 $lcdpanel_width 2 h 4 \"NTP Server is Disabled\"";
 						$lcd_cmds[] = "widget_set $name delay_wdgt 1 2 $lcdpanel_width 2 h 4 \"\"";
 						$lcd_cmds[] = "widget_set $name offset_wdgt 1 3 $lcdpanel_width 2 h 4 \"\"";
 						$lcd_cmds[] = "widget_set $name jitter_wdgt 1 4 $lcdpanel_width 2 h 4 \"\"";
-					} 
+					}
+
 					$updateSummary = false;
 					break;
 				case "scr_traffic":
